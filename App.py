@@ -5,56 +5,41 @@ from pycaret.regression import setup, compare_models, pull, save_model, load_mod
 import pandas_profiling
 import pandas as pd
 from streamlit_pandas_profiling import st_profile_report
-import os
-import h2o
-from h2o.automl import H2OAutoML
+import os 
 
-# Inicjalizacja H2O
-h2o.init()
+if os.path.exists('./dataset.csv'): 
+    df = pd.read_csv('dataset.csv', index_col=None)
 
-# Tytuł aplikacji
-st.title("AutoML porównanie: PyCaret vs H2O AutoML")
+with st.sidebar: 
+    st.image("https://www.onepointltd.com/wp-content/uploads/2020/03/inno2.png")
+    st.title("AutoNickML")
+    choice = st.radio("Navigation", ["Upload","Profiling","Modelling", "Download"])
+    st.info("This project application helps you build and explore your data.")
 
-# Krok 1: Ładowanie danych CSV
-st.sidebar.header("1. Wczytaj dane CSV")
-uploaded_file = st.sidebar.file_uploader("Wybierz plik CSV", type=["csv"])
+if choice == "Upload":
+    st.title("Upload Your Dataset")
+    file = st.file_uploader("Upload Your Dataset")
+    if file: 
+        df = pd.read_csv(file, index_col=None)
+        df.to_csv('dataset.csv', index=None)
+        st.dataframe(df)
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.write("Załadowane dane:")
-    st.write(df)
+if choice == "Profiling": 
+    st.title("Exploratory Data Analysis")
+    profile_df = df.profile_report()
+    st_profile_report(profile_df)
 
-    # Krok 2: Generowanie raportu (profiling)
-    st.sidebar.header("2. Profiling danych")
-    if st.sidebar.button("Generuj raport"):
-        pr = ProfileReport(df, explorative=True)
-        st_profile_report(pr)
+if choice == "Modelling": 
+    chosen_target = st.selectbox('Choose the Target Column', df.columns)
+    if st.button('Run Modelling'): 
+        setup(df, target=chosen_target, silent=True)
+        setup_df = pull()
+        st.dataframe(setup_df)
+        best_model = compare_models()
+        compare_df = pull()
+        st.dataframe(compare_df)
+        save_model(best_model, 'best_model')
 
-    # Krok 3: Wybór kolumny target
-    st.sidebar.header("3. Wybierz target")
-    target_column = st.sidebar.selectbox("Wybierz kolumnę target", df.columns)
-
-    if target_column:
-        st.write(f"Wybrana kolumna target: {target_column}")
-
-        # Krok 4: Porównanie PyCaret i H2O AutoML
-        if st.sidebar.button("Uruchom PyCaret i H2O AutoML"):
-            # PyCaret
-            st.header("PyCaret - Automatyzacja ML")
-            setup(data=df, target=target_column, silent=True, html=False)
-            best_model = compare_models()
-            st.write(f"Najlepszy model PyCaret: {best_model}")
-
-            # H2O AutoML
-            st.header("H2O AutoML - Automatyzacja ML")
-            h2o_df = h2o.H2OFrame(df)
-            aml = H2OAutoML(max_models=5, seed=1)
-            aml.train(y=target_column, training_frame=h2o_df)
-
-            # Wyświetlanie najlepszych modeli H2O AutoML
-            lb = aml.leaderboard
-            st.write("Tabela wyników H2O AutoML:")
-            st.write(lb.head())
-
-# Wyłączanie sesji H2O po zakończeniu
-h2o.cluster().shutdown()
+if choice == "Download": 
+    with open('best_model.pkl', 'rb') as f: 
+        st.download_button('Download Model', f, file_name="best_model.pkl")
